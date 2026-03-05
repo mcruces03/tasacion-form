@@ -39,9 +39,23 @@ app.use(express.json());
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-app.post('/api/send-report', upload.fields([{ name: 'pdf', maxCount: 1 }, { name: 'xlsx', maxCount: 1 }]), async (req, res) => {
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, emailConfigured: !!transporter });
+});
+
+app.post('/api/send-report', (req, res, next) => {
+  upload.fields([{ name: 'pdf', maxCount: 1 }, { name: 'xlsx', maxCount: 1 }])(req, res, (multerErr) => {
+    if (multerErr) {
+      console.error('Multer error:', multerErr);
+      return res.status(400).json({
+        error: multerErr.code === 'LIMIT_FILE_SIZE' ? 'Archivos demasiado grandes (máx. 10 MB)' : 'Error al subir archivos',
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
-    const email = (req.body.email || '').trim();
+    const email = (req.body?.email || '').trim();
     if (!email) {
       return res.status(400).json({ error: 'Email es obligatorio' });
     }
@@ -53,7 +67,7 @@ app.post('/api/send-report', upload.fields([{ name: 'pdf', maxCount: 1 }, { name
 
     if (!transporter) {
       return res.status(503).json({
-        error: 'Email no configurado. Añade EMAIL_USER y EMAIL_PASS en el archivo .env',
+        error: 'Email no configurado. Añade EMAIL_USER y EMAIL_PASS en el servidor (Render → Environment).',
       });
     }
 
@@ -75,9 +89,19 @@ app.post('/api/send-report', upload.fields([{ name: 'pdf', maxCount: 1 }, { name
 
     res.json({ success: true, message: 'Informe enviado correctamente' });
   } catch (err) {
-    console.error('Email error:', err);
-    const message = err.message || 'Error al enviar el email';
-    res.status(500).json({ error: message });
+    console.error('Send-report error:', err?.message || err);
+    if (err?.stack) console.error(err.stack);
+    const code = (err?.code || '').toLowerCase();
+    const msg = err?.message || '';
+    let userMessage = 'Error al enviar el email. Revisa los logs en Render.';
+    if (code === 'eauth' || msg.includes('Invalid login') || msg.includes('authentication')) {
+      userMessage = 'Email no configurado correctamente. Usa una Contraseña de aplicación de Gmail (no la contraseña normal).';
+    } else if (msg.includes('Timeout')) {
+      userMessage = msg;
+    } else if (msg && msg.length < 120) {
+      userMessage = msg;
+    }
+    res.status(500).json({ error: userMessage });
   }
 });
 
@@ -89,6 +113,12 @@ if (isProduction) {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
+
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err?.message || err);
+  if (err?.stack) console.error(err.stack);
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
