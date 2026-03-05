@@ -174,6 +174,7 @@ export default function App() {
       const baseName = `valoracion-${(form.direccion || 'inmueble').replace(/\s+/g, '_').substring(0, 30)}`;
       const formData = new FormData();
       formData.append('email', email);
+      formData.append('direccion', form.direccion || '');
       formData.append('pdf', pdfBlob, `${baseName}.pdf`);
       formData.append('xlsx', excelBlob, `${baseName}.xlsx`);
 

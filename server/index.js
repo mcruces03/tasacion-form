@@ -132,7 +132,13 @@ app.post('/api/send-report', (req, res, next) => {
       });
     }
 
-    const subject = 'Valoración de inmueble - Informe';
+    const inmuebleName = (req.body?.direccion || '').trim() || 'Inmueble';
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yy = String(now.getFullYear()).slice(-2);
+    const dateStr = `${dd}/${mm}/${yy}`;
+    const subject = `Valoracion del inmueble ${inmuebleName} - Informe ${dateStr}`;
     const text = 'Adjunto encontrará el informe de valoración en PDF y Excel.';
     const html = '<p>Adjunto encontrará el informe de valoración en PDF y Excel.</p>';
     const attachments = [
