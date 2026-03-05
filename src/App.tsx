@@ -227,7 +227,7 @@ export default function App() {
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-oliva-500 to-oliva-600 shadow-md shadow-oliva-200">
-              <Home className="h-5 w-5 text-white" />
+              <img src="/icon.svg" alt="" className="h-5 w-5 brightness-0 invert" aria-hidden />
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-800 leading-tight">Valoración</h1>
