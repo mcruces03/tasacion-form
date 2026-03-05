@@ -7,6 +7,7 @@ import cors from 'cors';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
 import smtpTransport from 'nodemailer-smtp-transport';
+import { google } from 'googleapis';
 import { Resend } from 'resend';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,33 +23,64 @@ const emailFrom = process.env.EMAIL_FROM || 'Valoración <onboarding@resend.dev>
 
 const emailUser = (process.env.EMAIL_USER || '').trim();
 
-// Gmail OAuth2 — funciona desde Render; envía desde tu Gmail sin dominio ni Resend
+// Gmail OAuth2 — Gmail API (HTTPS) para que funcione en Render (SMTP 587 suele estar bloqueado)
 const gmailClientId = process.env.GMAIL_CLIENT_ID || '';
 const gmailClientSecret = process.env.GMAIL_CLIENT_SECRET || '';
 const gmailRefreshToken = process.env.GMAIL_REFRESH_TOKEN || '';
-const gmailOauthTransporter =
-  !resend && emailUser && gmailClientId && gmailClientSecret && gmailRefreshToken
-    ? nodemailer.createTransport(smtpTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false,
-        auth: {
-          type: 'OAuth2',
-          user: emailUser,
-          clientId: gmailClientId,
-          clientSecret: gmailClientSecret,
-          refreshToken: gmailRefreshToken,
-        },
-        connectionTimeout: 20000,
-        greetingTimeout: 15000,
-        socketTimeout: 45000,
-      }))
-    : null;
+const gmailOauthConfigured =
+  !resend && !!(emailUser && gmailClientId && gmailClientSecret && gmailRefreshToken);
 
-// Fallback: Nodemailer con contraseña (solo en local; en Render suele dar "Connection timeout")
+function getGmailClient() {
+  const auth = new google.auth.OAuth2(gmailClientId, gmailClientSecret);
+  auth.setCredentials({ refresh_token: gmailRefreshToken });
+  return google.gmail({ version: 'v1', auth });
+}
+
+function buildMimeMessage(from, to, subject, html, attachments) {
+  const boundary = '----=_Part_' + Date.now();
+  const lines = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    '',
+    html,
+  ];
+  for (const att of attachments) {
+    const buf = Buffer.isBuffer(att.content) ? att.content : Buffer.from(att.content);
+    const mimeType = att.filename?.endsWith('.pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    lines.push(
+      `--${boundary}`,
+      `Content-Disposition: attachment; filename="${att.filename || 'file'}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Type: ${mimeType}`,
+      '',
+      buf.toString('base64')
+    );
+  }
+  lines.push(`--${boundary}--`);
+  return Buffer.from(lines.join('\r\n'), 'utf8');
+}
+
+async function sendViaGmailApi(to, subject, html, attachments) {
+  const gmail = getGmailClient();
+  const from = `"Valoración" <${emailUser}>`;
+  const raw = buildMimeMessage(from, to, subject, html, attachments);
+  const rawBase64Url = raw.toString('base64').replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: rawBase64Url },
+  });
+}
+
+// Fallback: Nodemailer SMTP con contraseña (solo en local; en Render suele dar "Connection timeout")
 const emailPass = process.env.EMAIL_PASS || '';
 const transporter =
-  !resend && !gmailOauthTransporter && emailUser && emailPass
+  !resend && !gmailOauthConfigured && emailUser && emailPass
     ? nodemailer.createTransport(smtpTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
         port: Number(process.env.SMTP_PORT) || 587,
@@ -59,7 +91,7 @@ const transporter =
       }))
     : null;
 
-const emailConfigured = !!(resend || gmailOauthTransporter || transporter);
+const emailConfigured = !!(resend || gmailOauthConfigured || transporter);
 // Gmail OAuth + Render: primera vez puede tardar (token refresh + conexión); dar margen
 const SEND_MAIL_TIMEOUT_MS = 55000;
 
@@ -121,10 +153,17 @@ app.post('/api/send-report', (req, res, next) => {
         if (error) throw new Error(error.message || 'Resend error');
         return data;
       });
-    } else {
-      const transport = gmailOauthTransporter || transporter;
+    } else if (gmailOauthConfigured) {
       const sendStart = Date.now();
-      console.log('Send-mail: iniciando envío (Gmail OAuth/Nodemailer)...');
+      console.log('Send-mail: iniciando envío (Gmail API)...');
+      sendPromise = sendViaGmailApi(email, subject, html, attachments).then((result) => {
+        console.log(`Send-mail: envío completado en ${Date.now() - sendStart} ms`);
+        return result;
+      });
+    } else {
+      const transport = transporter;
+      const sendStart = Date.now();
+      console.log('Send-mail: iniciando envío (Nodemailer SMTP)...');
       sendPromise = transport.sendMail({
         from: `"Valoración" <${emailUser}>`,
         to: email,
@@ -179,8 +218,8 @@ app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
   if (resend) {
     console.log('Email configurado (Resend). Envíos desde:', emailFrom);
-  } else if (gmailOauthTransporter) {
-    console.log('Email configurado (Gmail OAuth2). Envíos desde:', emailUser);
+  } else if (gmailOauthConfigured) {
+    console.log('Email configurado (Gmail API / OAuth2). Envíos desde:', emailUser);
   } else if (transporter) {
     console.log('Email configurado (Nodemailer). Envíos desde:', emailUser);
   } else {
