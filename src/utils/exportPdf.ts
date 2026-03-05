@@ -8,7 +8,7 @@ declare module 'jspdf' {
   }
 }
 
-const OLIVA: [number, number, number] = [160, 175, 31];
+const OLIVA: [number, number, number] = [166, 175, 97];
 const OLIVA_LIGHT: [number, number, number] = [242, 244, 196];
 const GREY_BG: [number, number, number] = [248, 250, 252];
 const GREY_BORDER: [number, number, number] = [226, 232, 240];
