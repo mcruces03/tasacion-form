@@ -19,7 +19,7 @@ const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path
 // Email: Resend (opcional; si no hay dominio verificado solo envía a tu email)
 const resendApiKey = process.env.RESEND_API_KEY || '';
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
-const emailFrom = process.env.EMAIL_FROM || 'Valoración <onboarding@resend.dev>';
+const emailFrom = process.env.EMAIL_FROM || 'Valoracion <onboarding@resend.dev>';
 
 const emailUser = (process.env.EMAIL_USER || '').trim();
 
@@ -68,7 +68,7 @@ function buildMimeMessage(from, to, subject, html, attachments) {
 
 async function sendViaGmailApi(to, subject, html, attachments) {
   const gmail = getGmailClient();
-  const from = `"Valoración" <${emailUser}>`;
+  const from = `"Valoracion" <${emailUser}>`;
   const raw = buildMimeMessage(from, to, subject, html, attachments);
   const rawBase64Url = raw.toString('base64').replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
   await gmail.users.messages.send({
@@ -171,7 +171,7 @@ app.post('/api/send-report', (req, res, next) => {
       const sendStart = Date.now();
       console.log('Send-mail: iniciando envío (Nodemailer SMTP)...');
       sendPromise = transport.sendMail({
-        from: `"Valoración" <${emailUser}>`,
+        from: `"Valoracion" <${emailUser}>`,
         to: email,
         subject,
         text,

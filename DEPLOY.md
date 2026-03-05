@@ -238,7 +238,7 @@ Resend te mostrará unos **registros DNS** que debes crear en tu proveedor de do
 - En Render → tu servicio → **Environment**.
 - Añade una nueva variable:
   - **Key:** `EMAIL_FROM`
-  - **Value:** `Valoración <noreply@tudominio.com>`  
+  - **Value:** `Valoracion <noreply@tudominio.com>`  
     (sustituye `noreply@tudominio.com` por el email que hayas elegido en tu dominio verificado).
 - Guarda. Render volverá a desplegar solo; si no, haz un **Manual Deploy** para aplicar el cambio.
 
@@ -254,7 +254,7 @@ Resend te mostrará unos **registros DNS** que debes crear en tu proveedor de do
 | [resend.com/domains](https://resend.com/domains) | Añadir dominio → copiar registros DNS |
 | Proveedor del dominio (GoDaddy, etc.) | Crear los registros MX/TXT que indique Resend |
 | [resend.com/domains](https://resend.com/domains) | Pulsar Verify hasta que el dominio esté "Verified" |
-| Render → Environment | Añadir `EMAIL_FROM` = `Valoración <noreply@tudominio.com>` |
+| Render → Environment | Añadir `EMAIL_FROM` = `Valoracion <noreply@tudominio.com>` |
 
 Si no tienes dominio propio, puedes usar solo tu email como destinatario (el de la cuenta Resend) o valorar un dominio barato (p. ej. en Namecheap, Cloudflare, etc.) solo para el remitente del correo.
 
