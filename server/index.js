@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
+import smtpTransport from 'nodemailer-smtp-transport';
 import { Resend } from 'resend';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,8 +28,10 @@ const gmailClientSecret = process.env.GMAIL_CLIENT_SECRET || '';
 const gmailRefreshToken = process.env.GMAIL_REFRESH_TOKEN || '';
 const gmailOauthTransporter =
   !resend && emailUser && gmailClientId && gmailClientSecret && gmailRefreshToken
-    ? nodemailer.createTransport({
-        service: 'gmail',
+    ? nodemailer.createTransport(smtpTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
         auth: {
           type: 'OAuth2',
           user: emailUser,
@@ -39,21 +42,21 @@ const gmailOauthTransporter =
         connectionTimeout: 20000,
         greetingTimeout: 15000,
         socketTimeout: 45000,
-      })
+      }))
     : null;
 
 // Fallback: Nodemailer con contraseña (solo en local; en Render suele dar "Connection timeout")
 const emailPass = process.env.EMAIL_PASS || '';
 const transporter =
   !resend && !gmailOauthTransporter && emailUser && emailPass
-    ? nodemailer.createTransport({
+    ? nodemailer.createTransport(smtpTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
         port: Number(process.env.SMTP_PORT) || 587,
         secure: false,
         auth: { user: emailUser, pass: emailPass },
         connectionTimeout: 15000,
         greetingTimeout: 10000,
-      })
+      }))
     : null;
 
 const emailConfigured = !!(resend || gmailOauthTransporter || transporter);
