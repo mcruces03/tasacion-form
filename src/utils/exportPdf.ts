@@ -30,7 +30,8 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 
 async function loadLogoDataUrl(): Promise<string | null> {
   try {
-    const base = typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL != null ? import.meta.env.BASE_URL : '/';
+    const meta = import.meta as { env?: { BASE_URL?: string } };
+    const base = meta.env?.BASE_URL ?? '/';
     const res = await fetch(`${base}logo.png`);
     if (!res.ok) return null;
     const blob = await res.blob();
