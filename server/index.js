@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -13,25 +14,26 @@ const port = process.env.PORT || 3001;
 const rootDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.join(rootDir, 'dist'));
 
-// Sender email config: set EMAIL_USER and EMAIL_PASS in .env
-// For Gmail: use an App Password (https://myaccount.google.com/apppasswords)
+// Email: Resend (recomendado en Render — Gmail SMTP suele dar timeout desde la nube)
+const resendApiKey = process.env.RESEND_API_KEY || '';
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+const emailFrom = process.env.EMAIL_FROM || 'Valoración <onboarding@resend.dev>';
+
+// Fallback: Nodemailer (Gmail, etc.) — funciona en local; en Render suele dar "Connection timeout"
 const emailUser = process.env.EMAIL_USER || '';
 const emailPass = process.env.EMAIL_PASS || '';
-
-const transporter = emailUser && emailPass
+const transporter = !resend && emailUser && emailPass
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: Number(process.env.SMTP_PORT) || 587,
       secure: false,
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
+      auth: { user: emailUser, pass: emailPass },
       connectionTimeout: 15000,
       greetingTimeout: 10000,
     })
   : null;
 
+const emailConfigured = !!(resend || transporter);
 const SEND_MAIL_TIMEOUT_MS = 25000;
 
 app.use(cors({ origin: true }));
@@ -40,7 +42,7 @@ app.use(express.json());
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, emailConfigured: !!transporter });
+  res.json({ ok: true, emailConfigured });
 });
 
 app.post('/api/send-report', (req, res, next) => {
@@ -65,23 +67,43 @@ app.post('/api/send-report', (req, res, next) => {
       return res.status(400).json({ error: 'Faltan archivos PDF o Excel' });
     }
 
-    if (!transporter) {
+    if (!emailConfigured) {
       return res.status(503).json({
-        error: 'Email no configurado. Añade EMAIL_USER y EMAIL_PASS en el servidor (Render → Environment).',
+        error: 'Email no configurado. En Render usa RESEND_API_KEY (recomendado) o EMAIL_USER + EMAIL_PASS.',
       });
     }
 
-    const sendPromise = transporter.sendMail({
-      from: `"Valoración" <${emailUser}>`,
-      to: email,
-      subject: 'Valoración de inmueble - Informe',
-      text: 'Adjunto encontrará el informe de valoración en PDF y Excel.',
-      html: '<p>Adjunto encontrará el informe de valoración en PDF y Excel.</p>',
-      attachments: [
-        { filename: pdfFile.originalname || 'valoracion.pdf', content: pdfFile.buffer },
-        { filename: xlsxFile.originalname || 'valoracion.xlsx', content: xlsxFile.buffer },
-      ],
-    });
+    const subject = 'Valoración de inmueble - Informe';
+    const text = 'Adjunto encontrará el informe de valoración en PDF y Excel.';
+    const html = '<p>Adjunto encontrará el informe de valoración en PDF y Excel.</p>';
+    const attachments = [
+      { filename: pdfFile.originalname || 'valoracion.pdf', content: pdfFile.buffer },
+      { filename: xlsxFile.originalname || 'valoracion.xlsx', content: xlsxFile.buffer },
+    ];
+
+    let sendPromise;
+    if (resend) {
+      sendPromise = resend.emails.send({
+        from: emailFrom,
+        to: [email],
+        subject,
+        text,
+        html,
+        attachments,
+      }).then(({ data, error }) => {
+        if (error) throw new Error(error.message || 'Resend error');
+        return data;
+      });
+    } else {
+      sendPromise = transporter.sendMail({
+        from: `"Valoración" <${emailUser}>`,
+        to: email,
+        subject,
+        text,
+        html,
+        attachments,
+      });
+    }
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Timeout enviando el email. Vuelve a intentarlo.')), SEND_MAIL_TIMEOUT_MS)
     );
@@ -122,9 +144,11 @@ app.use((err, req, res, next) => {
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
-  if (!transporter) {
-    console.warn('EMAIL_USER y/o EMAIL_PASS no definidos en .env — el envío por email no funcionará.');
+  if (resend) {
+    console.log('Email configurado (Resend). Envíos desde:', emailFrom);
+  } else if (transporter) {
+    console.log('Email configurado (Nodemailer). Envíos desde:', emailUser);
   } else {
-    console.log(`Email configurado: envíos desde ${emailUser}`);
+    console.warn('Email no configurado. En Render usa RESEND_API_KEY. En local: EMAIL_USER + EMAIL_PASS.');
   }
 });

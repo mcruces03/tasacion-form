@@ -66,14 +66,28 @@ Si no aparece, añade una línea con `.env` en `.gitignore`.
 
 ### Paso 4: Variables de entorno (email)
 
-En el mismo servicio, ve a **“Environment”** (menú izquierdo) y añade:
+En el mismo servicio, ve a **“Environment”** (menú izquierdo) y añade **una** de estas opciones:
+
+**Opción A — Resend (recomendada en Render)**  
+Gmail desde Render suele dar “Connection timeout”. Resend funciona desde la nube.
+
+| Key | Value |
+|-----|--------|
+| `RESEND_API_KEY` | Tu API key de Resend |
+
+1. Regístrate en [resend.com](https://resend.com) (plan gratuito).
+2. Ve a [API Keys](https://resend.com/api-keys) → Create API Key → copia la key (empieza por `re_`).
+3. Pégala en `RESEND_API_KEY`. Los correos se enviarán desde `onboarding@resend.dev` (límite del plan gratis). Si más adelante verificas un dominio en Resend, puedes añadir `EMAIL_FROM=Valoración <noreply@tudominio.com>`.
+
+**Opción B — Gmail (Nodemailer)**  
+Puede dar timeout en Render; mejor para desarrollo local.
 
 | Key | Value |
 |-----|--------|
 | `EMAIL_USER` | Tu email (ej. `mfcruces@gmail.com`) |
-| `EMAIL_PASS` | Tu contraseña de aplicación de Gmail |
+| `EMAIL_PASS` | Contraseña de aplicación de Gmail |
 
-Para obtener la contraseña de aplicación de Gmail:
+Para la contraseña de aplicación:
 
 1. [Google Account → Security](https://myaccount.google.com/security)
 2. Activa **Verificación en 2 pasos** si no está activa.
