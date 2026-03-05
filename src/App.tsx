@@ -176,7 +176,15 @@ export default function App() {
       formData.append('email', email);
       formData.append('pdf', pdfBlob, `${baseName}.pdf`);
       formData.append('xlsx', excelBlob, `${baseName}.xlsx`);
-      const res = await fetch('/api/send-report', { method: 'POST', body: formData });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      const res = await fetch('/api/send-report', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || `Error ${res.status}`);
@@ -184,7 +192,11 @@ export default function App() {
       setSendEmailSuccess(true);
       setEmailToSend(DEFAULT_EMAIL);
     } catch (e) {
-      setSendEmailError(e instanceof Error ? e.message : 'Error al enviar');
+      if (e instanceof Error && e.name === 'AbortError') {
+        setSendEmailError('Tiempo de espera agotado. En el plan gratuito el servidor puede tardar ~1 min la primera vez; vuelve a intentar.');
+      } else {
+        setSendEmailError(e instanceof Error ? e.message : 'Error al enviar');
+      }
     } finally {
       setSendEmailLoading(false);
     }
@@ -726,6 +738,9 @@ export default function App() {
               >
                 {sendEmailLoading ? 'Enviando…' : 'Enviar'}
               </button>
+              {sendEmailLoading && (
+                <p className="text-center text-xs text-slate-400">La primera vez puede tardar hasta 1 min (servidor en reposo).</p>
+              )}
             </div>
           </div>
         </div>

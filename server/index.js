@@ -27,8 +27,12 @@ const transporter = emailUser && emailPass
         user: emailUser,
         pass: emailPass,
       },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
     })
   : null;
+
+const SEND_MAIL_TIMEOUT_MS = 25000;
 
 app.use(cors({ origin: true }));
 app.use(express.json());
@@ -53,7 +57,7 @@ app.post('/api/send-report', upload.fields([{ name: 'pdf', maxCount: 1 }, { name
       });
     }
 
-    await transporter.sendMail({
+    const sendPromise = transporter.sendMail({
       from: `"Valoración" <${emailUser}>`,
       to: email,
       subject: 'Valoración de inmueble - Informe',
@@ -64,6 +68,10 @@ app.post('/api/send-report', upload.fields([{ name: 'pdf', maxCount: 1 }, { name
         { filename: xlsxFile.originalname || 'valoracion.xlsx', content: xlsxFile.buffer },
       ],
     });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout enviando el email. Vuelve a intentarlo.')), SEND_MAIL_TIMEOUT_MS)
+    );
+    await Promise.race([sendPromise, timeoutPromise]);
 
     res.json({ success: true, message: 'Informe enviado correctamente' });
   } catch (err) {
