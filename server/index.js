@@ -36,6 +36,9 @@ const gmailOauthTransporter =
           clientSecret: gmailClientSecret,
           refreshToken: gmailRefreshToken,
         },
+        connectionTimeout: 20000,
+        greetingTimeout: 15000,
+        socketTimeout: 45000,
       })
     : null;
 
@@ -54,7 +57,8 @@ const transporter =
     : null;
 
 const emailConfigured = !!(resend || gmailOauthTransporter || transporter);
-const SEND_MAIL_TIMEOUT_MS = 25000;
+// Gmail OAuth + Render: primera vez puede tardar (token refresh + conexión); dar margen
+const SEND_MAIL_TIMEOUT_MS = 55000;
 
 app.use(cors({ origin: true }));
 app.use(express.json());
@@ -116,6 +120,8 @@ app.post('/api/send-report', (req, res, next) => {
       });
     } else {
       const transport = gmailOauthTransporter || transporter;
+      const sendStart = Date.now();
+      console.log('Send-mail: iniciando envío (Gmail OAuth/Nodemailer)...');
       sendPromise = transport.sendMail({
         from: `"Valoración" <${emailUser}>`,
         to: email,
@@ -123,6 +129,9 @@ app.post('/api/send-report', (req, res, next) => {
         text,
         html,
         attachments,
+      }).then((result) => {
+        console.log(`Send-mail: envío completado en ${Date.now() - sendStart} ms`);
+        return result;
       });
     }
     const timeoutPromise = new Promise((_, reject) =>
