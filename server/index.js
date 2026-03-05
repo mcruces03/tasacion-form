@@ -14,26 +14,46 @@ const port = process.env.PORT || 3001;
 const rootDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.join(rootDir, 'dist'));
 
-// Email: Resend (recomendado en Render — Gmail SMTP suele dar timeout desde la nube)
+// Email: Resend (opcional; si no hay dominio verificado solo envía a tu email)
 const resendApiKey = process.env.RESEND_API_KEY || '';
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 const emailFrom = process.env.EMAIL_FROM || 'Valoración <onboarding@resend.dev>';
 
-// Fallback: Nodemailer (Gmail, etc.) — funciona en local; en Render suele dar "Connection timeout"
-const emailUser = process.env.EMAIL_USER || '';
-const emailPass = process.env.EMAIL_PASS || '';
-const transporter = !resend && emailUser && emailPass
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-      auth: { user: emailUser, pass: emailPass },
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-    })
-  : null;
+const emailUser = (process.env.EMAIL_USER || '').trim();
 
-const emailConfigured = !!(resend || transporter);
+// Gmail OAuth2 — funciona desde Render; envía desde tu Gmail sin dominio ni Resend
+const gmailClientId = process.env.GMAIL_CLIENT_ID || '';
+const gmailClientSecret = process.env.GMAIL_CLIENT_SECRET || '';
+const gmailRefreshToken = process.env.GMAIL_REFRESH_TOKEN || '';
+const gmailOauthTransporter =
+  !resend && emailUser && gmailClientId && gmailClientSecret && gmailRefreshToken
+    ? nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          type: 'OAuth2',
+          user: emailUser,
+          clientId: gmailClientId,
+          clientSecret: gmailClientSecret,
+          refreshToken: gmailRefreshToken,
+        },
+      })
+    : null;
+
+// Fallback: Nodemailer con contraseña (solo en local; en Render suele dar "Connection timeout")
+const emailPass = process.env.EMAIL_PASS || '';
+const transporter =
+  !resend && !gmailOauthTransporter && emailUser && emailPass
+    ? nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: Number(process.env.SMTP_PORT) || 587,
+        secure: false,
+        auth: { user: emailUser, pass: emailPass },
+        connectionTimeout: 15000,
+        greetingTimeout: 10000,
+      })
+    : null;
+
+const emailConfigured = !!(resend || gmailOauthTransporter || transporter);
 const SEND_MAIL_TIMEOUT_MS = 25000;
 
 app.use(cors({ origin: true }));
@@ -69,7 +89,7 @@ app.post('/api/send-report', (req, res, next) => {
 
     if (!emailConfigured) {
       return res.status(503).json({
-        error: 'Email no configurado. En Render usa RESEND_API_KEY (recomendado) o EMAIL_USER + EMAIL_PASS.',
+        error: 'Email no configurado. En Render: GMAIL_CLIENT_ID + GMAIL_CLIENT_SECRET + GMAIL_REFRESH_TOKEN + EMAIL_USER (ver DEPLOY.md), o RESEND_API_KEY.',
       });
     }
 
@@ -95,7 +115,8 @@ app.post('/api/send-report', (req, res, next) => {
         return data;
       });
     } else {
-      sendPromise = transporter.sendMail({
+      const transport = gmailOauthTransporter || transporter;
+      sendPromise = transport.sendMail({
         from: `"Valoración" <${emailUser}>`,
         to: email,
         subject,
@@ -146,9 +167,11 @@ app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
   if (resend) {
     console.log('Email configurado (Resend). Envíos desde:', emailFrom);
+  } else if (gmailOauthTransporter) {
+    console.log('Email configurado (Gmail OAuth2). Envíos desde:', emailUser);
   } else if (transporter) {
     console.log('Email configurado (Nodemailer). Envíos desde:', emailUser);
   } else {
-    console.warn('Email no configurado. En Render usa RESEND_API_KEY. En local: EMAIL_USER + EMAIL_PASS.');
+    console.warn('Email no configurado. Ver DEPLOY.md: Gmail OAuth2 o Resend.');
   }
 });

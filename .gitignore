@@ -4,10 +4,11 @@ node_modules/
 # Build
 dist/
 
-# Env (contains email password — never commit)
+# Env and secrets (never commit)
 .env
 .env.local
 .env.*.local
+oauth-credentials.md
 
 # Logs and OS
 *.log
