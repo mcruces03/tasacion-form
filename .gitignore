@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# Env (contains email password — never commit)
+.env
+.env.local
+.env.*.local
+
+# Logs and OS
+*.log
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
